@@ -9,3 +9,5 @@ matplotlib==3.10.9
 transformers==5.10.2
 scikit-learn==1.9.0
 python-dotenv==1.2.2
+fastapi==0.139.0
+uvicorn==0.50.0
