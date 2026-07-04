@@ -2,6 +2,11 @@ from dataclasses import dataclass
 import os
 from dotenv import load_dotenv
 
+
+class InvalidLLMConfigurationError(ValueError):
+    """Raised when the OpenAI LLM configuration contains invalid values."""
+    pass
+
 @dataclass
 class Config:
     api_key: str | None
@@ -24,5 +29,5 @@ def load_config() -> Config:
         api_key=os.getenv("CHUTES_API_KEY"),
         api_base=os.getenv("CHUTES_API_BASE"),
         llm=os.getenv("CHUTES_LLM"),
-        system_prompt_path="./prompts/system_prompt.txt"
+        system_prompt_path="../prompts/system_prompt.txt"
     )

@@ -1,109 +1,45 @@
-import os
-from openai import OpenAI
-import json
-import re
 from predict import predict_age
-from config import load_config, Config
+from reasoning import get_reasoning
+from config import InvalidLLMConfigurationError
+from fastapi import FastAPI
+import logging
+from openai import OpenAIError
+from pydantic import BaseModel
 
-def check_file(path):
-    return (
-        os.path.exists(path)
-        and os.path.isfile(path)
-        and os.path.getsize(path) > 0
-    )
+app = FastAPI()
+logger = logging.getLogger(__name__)
+
+class PredictionRequest(BaseModel):
+    text: str
 
 
-def extract_json_data(mixed_string: str | None) -> dict:
-    if not mixed_string:
-        return {}
+@app.post("/predict")
+def main(request: PredictionRequest):
+    user_input = request.text
 
-    mixed_string = re.sub(r"^```json\s*", "", mixed_string.strip())
-    mixed_string = re.sub(r"\s*```$", "", mixed_string)
+    prediction = predict_age(user_input)
+    pred2dict = prediction.to_dict()
 
     try:
-        return json.loads(mixed_string)
-    except json.JSONDecodeError:
-        return {}
+        reasoning = get_reasoning(prediction)
 
+    except InvalidLLMConfigurationError as e:
+        logger.error("Invalid LLM configuration: %s", e)
+        reasoning = None
 
-def create_client(conf: Config) -> OpenAI:
-    return OpenAI(
-        api_key=conf.api_key,
-        base_url=conf.api_base
-    )
+    except ValueError as e:
+        logger.error("Prediction results are invalid: %s", e)
+        reasoning = None
 
+    except FileNotFoundError as e:
+        logger.error("System prompt file not found: %s", e)
+        reasoning = None
 
-def main():
+    except OpenAIError as e:
+        logger.error("Unspecified OpenAI error: %s", e)
+        reasoning = None
 
-    print("|----------------Message Input----------------|")
-    user_input = input("> ")
-    print("> ")
-
-    if user_input != "":
-        pred_results_dict = predict_age(user_input)
-        pred_results_str = json.dumps(
-            pred_results_dict,
-            ensure_ascii=False,
-            indent=2
-        )
-
-        for k, v in pred_results_dict.items():
-            if k != "text":
-                print(f"> {k}: {v}")
-
-    else:
-        print("Empty input. Cannot work without the user text")
-        print("Terminating.....")
-        return
-
-    conf = load_config()
-
-    # If LLM is connected
-    if conf.llm_enabled():
-        client = create_client(conf)
-
-        system_prompt = ""
-        messages = []
-
-        if check_file(conf.system_prompt_path):
-            print("Loading system prompt...")
-            with open(conf.system_prompt_path, "r", encoding="utf-8") as f:
-                system_prompt = f.read()
-
-        else:
-            print(f"Path '{conf.system_prompt_path}' does not exist or is empty")
-
-        if system_prompt != "":
-            messages.append(
-                {"role": "system", "content": system_prompt}
-            )
-
-        if pred_results_str != "":
-            messages.append(
-                {"role": "user", "content": pred_results_str}
-            )
-
-        try:
-            response = client.chat.completions.create(
-                model=conf.llm,
-                messages=messages,
-            )
-            llm_output_str = response.choices[0].message.content
-            llm_output_dict = extract_json_data(llm_output_str)
-
-            print("|----------------Reasoning----------------|")
-            print(f"> {llm_output_dict.get(
-                        "reasoning",
-                        "Reasoning unavailable"
-                        )}")
-
-        except Exception as e:
-            print(type(e))
-            print(e)
-
-    else:
-        print("Reasoning unavailable. No LLM configuration set")
-
-
-if __name__ == "__main__":
-    main()
+    return {
+        "prediction": pred2dict,
+        "reasoning": reasoning
+    }
