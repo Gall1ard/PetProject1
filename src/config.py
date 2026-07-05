@@ -10,14 +10,14 @@ class InvalidLLMConfigurationError(ValueError):
 @dataclass
 class Config:
     api_key: str | None
-    api_base: str | None
+    base_url: str | None
     llm: str | None
     system_prompt_path: str
 
     def llm_enabled(self) -> bool:
         return bool(
             self.api_key
-            and self.api_base
+            and self.base_url
             and self.llm
         )
 
@@ -27,7 +27,7 @@ def load_config() -> Config:
 
     return Config(
         api_key=os.getenv("CHUTES_API_KEY"),
-        api_base=os.getenv("CHUTES_API_BASE"),
+        base_url=os.getenv("CHUTES_API_BASE"),
         llm=os.getenv("CHUTES_LLM"),
-        system_prompt_path="../prompts/system_prompt.txt"
+        system_prompt_path="./prompts/system_prompt.txt"
     )

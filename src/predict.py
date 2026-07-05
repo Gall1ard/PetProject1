@@ -1,17 +1,39 @@
 from transformers import pipeline
 from dataclasses import dataclass
+import os
 
+MODEL_PATH = "./models/age_classifier"
 
-classifier = pipeline(
-    "text-classification",
-    model="../models/age_classifier"
-)
+classifier = None
 
 id2label = {
     "LABEL_0": "13-17",
     "LABEL_1": "18-29",
     "LABEL_2": "30-48"
 }
+
+
+class ModelNotFoundError(FileNotFoundError):
+    """Raises when the fine-tuned model does not exist (not downloaded/trained)."""
+    pass
+
+
+def _load_classifier():
+    if not os.path.isdir(MODEL_PATH):
+        raise ModelNotFoundError(
+            f"No model found at '{MODEL_PATH}'. This project doesn't ship "
+            "pretrained weights in git. Train one first:\n"
+            "  1) python src/prepare_data.py\n"
+            "  2) python src/fine_tuning.py\n"
+            "This trains a full BERT classifier and will take a while "
+            "(and benefits a lot from a GPU)."
+        )
+
+    return pipeline(
+        "text-classification",
+        model=MODEL_PATH
+    )
+
 
 @dataclass
 class Prediction:
@@ -22,7 +44,7 @@ class Prediction:
     def to_dict(self) -> dict:
         return {
             "age_group": self.age_group,
-            "confidence": f"{self.confidence}%",
+            "confidence": f"{round(self.confidence*100, 2)}%",
             "text": self.text
         }
 
@@ -42,6 +64,11 @@ class Prediction:
 
 
 def predict_age(text: str) -> Prediction:
+    global classifier
+
+    if classifier is None:
+        classifier = _load_classifier()
+
     prediction = Prediction()
 
     if not text.strip():

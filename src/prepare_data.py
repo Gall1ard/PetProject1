@@ -22,7 +22,7 @@ def prepare_dataset():
     data.to_csv('./data/prepared.csv', index=False)
 
 def main():
-    if not(os.path.exists("../data/prepared.csv")):
+    if not(os.path.exists("./data/prepared.csv")):
         prepare_dataset()
 
 

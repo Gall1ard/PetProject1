@@ -1,6 +1,6 @@
 # Age Prediction from Text using BERT
 
-A machine learning project that predicts the author's age group from English text using a fine-tuned BERT model and lets a chosen external LLM to explain how the choice was made.
+A machine learning project that predicts the author's age group from English text using a fine-tuned BERT model and lets a chosen external LLM explain how the choice was made.
 
 ## Overview
 
@@ -85,9 +85,11 @@ project/
 │   ├── fine_tuning.py
 │   ├── main.py
 │   ├── predict.py
-│   └── prepare_data.py
+│   ├── prepare_data.py
+│   └── reasoning.py
 │
 ├── requirements.txt
+├── requirements-dev.txt
 ├── .gitignore
 └── README.md
 ```
@@ -96,65 +98,97 @@ project/
 
 ```bash
 git clone https://github.com/Gall1ard/age-classifier.git
-cd project
+cd age-classifier
 
 pip install -r requirements.txt
 ```
 
+All commands below are meant to be run from the project root (this directory), not from inside `src/`.
+
 ## Training
 
-```bash
-python src/fine_tuning.py
-```
-
-## Prediction
+This repo does not ship pretrained weights — `models/age_classifier/` is gitignored because a fine-tuned BERT checkpoint is hundreds of MB. You need to build it locally before prediction or the API will work:
 
 ```bash
-python src/main.py
+python src/prepare_data.py   # downloads + cleans the dataset into data/prepared.csv
+python src/fine_tuning.py    # fine-tunes BERT, saves to models/age_classifier/
 ```
+
+Fine-tuning benefits significantly from a GPU; on CPU expect it to be considerably slower.
+
+## Evaluation
+
+```bash
+python src/evaluate.py
+```
+
+Prints a classification report and shows the confusion matrix (requires a trained model, see above).
+
+## Running the API
+
+```bash
+uvicorn src.main:app --reload --app-dir src
+```
+
+Then either open `http://localhost:8000/docs` for interactive Swagger docs, or:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I am preparing for my university exams and applying for internships."}'
+```
+
+`GET /health` is available for basic liveness checks.
 
 ## Optional LLM Reasoning
 
 The project supports optional LLM-powered explanations for age predictions.
 
-When enabled, an external LLM analyzes the input text and explains why the classifier assigned a particular age group.
+When enabled, an external LLM analyzes the input text and explains why the classifier assigned a particular age group. If it isn't configured, `/predict` still works — the `reasoning` field just comes back with `status: "disabled"`.
 
 ### Configuration
 
 Create a `.env` file in the project root:
 
 ```env
-CHUTES_API=your_api_key
-CHUTES_BASE_URL=https://your-chutes-endpoint
+CHUTES_API_KEY=your_api_key
+CHUTES_API_BASE=https://your-chutes-endpoint
 CHUTES_LLM=chosen_model_name (example: google/gemma-4-31B-turbo-TEE)
 ```
 
 ### Environment Variables
 
 | Variable          | Description                         |
-| ----------------- | ----------------------------------- |
-| `CHUTES_API`      | Chutes API key                      |
-| `CHUTES_BASE_URL` | Chutes API base URL                 |
-| `CHUTES_LLM`      | Model identifier used for reasoning |
+| ----------------- | ------------------------------------ |
+| `CHUTES_API_KEY`  | Chutes API key                       |
+| `CHUTES_API_BASE` | Chutes API base URL                  |
+| `CHUTES_LLM`      | Model identifier used for reasoning  |
+
+All three must be set for reasoning to activate; if only some are set, a warning is logged so the gap is obvious instead of silent.
 
 ### Example
 
-Input:
+Request:
 
-```text
-I am preparing for my university exams and applying for internships.
+```json
+{ "text": "I am preparing for my university exams and applying for internships." }
 ```
 
-Prediction:
+Response:
 
-```text
-18-29
-```
-
-LLM Explanation:
-
-```text
-The text references university studies and internships, which are commonly associated with young adults. The writing style and discussed topics are more typical of the 18–29 age group than teenagers or older adults.
+```json
+{
+  "prediction": {
+    "age_group": "18-29",
+    "confidence": "91%",
+    "text": "I am preparing for my university exams and applying for internships."
+  },
+  "reasoning": {
+    "status": "ok",
+    "text": "The text references university studies and internships, which are commonly associated with young adults.",
+    "error": null
+  }
+}
 ```
 
 ## Future Improvements
@@ -162,8 +196,5 @@ The text references university studies and internships, which are commonly assoc
 * Compare BERT and RoBERTa
 * Use industry as an additional feature
 * Experiment with larger context lengths
-* Deploy as a FastAPI service
-* Create a web interface
-
-```
-```
+* Publish the fine-tuned model to the Hugging Face Hub so `predict.py` can fetch it instead of requiring a local training run
+* Create a web interface (React)
