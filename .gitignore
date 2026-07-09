@@ -116,7 +116,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+backend/.env
 .venv
 env/
 venv/
@@ -152,8 +152,8 @@ cython_debug/
 .idea/
 
 # Dataset
-data/
+backend/data/
 
 # Models
-models/age_classifier/
-results/
+backend/models/age_classifier/
+backend/results/
